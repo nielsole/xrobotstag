@@ -3,9 +3,9 @@ package xrobotstag
 import (
 	"time"
 	"net/http"
-	"fmt"
 	"strings"
 	"errors"
+	"golang.org/x/net/html"
 )
 
 type RobotsTag struct {
@@ -29,6 +29,46 @@ func RobotsTagFromHeaders(header *http.Header, botname string) *RobotsTag {
 	}
 	return robotsTag
 }
+
+func RobotsTagFromHtmlTag(token *html.Node, botname string, parsedTag *RobotsTag) error {
+	if (token.Data != "meta") {
+		return errors.New("Node is not a meta-node")
+	}
+	var attributes string
+	var affectedBot string
+	for _, attr := range token.Attr {
+		if attr.Key == "content" {
+			attributes = attr.Val
+		}
+		if attr.Key == "name" {
+			affectedBot = attr.Val
+		}
+	}
+	if (attributes == ""){
+		return errors.New("No content flag there")
+	}
+	// Check whether we are meant by this flag
+	if (affectedBot != botname && affectedBot != "robots") {
+		return nil
+	}
+	parseHtmlTag(attributes, parsedTag)
+	return nil
+}
+
+func parseHtmlTag(rawString string, parsedTag *RobotsTag) error {
+	var botnameAndBody []string = strings.SplitN(rawString, ":", 2)
+	if len(botnameAndBody) > 1 && botnameAndBody[0] == "unavailable_after" {
+		unavAfter, err := parseUnavailableAfter(botnameAndBody[1])
+		if err != nil{
+			return errors.New("Could not parse datetime")
+		}
+		parsedTag.UnavailableAfter = unavAfter
+		return nil
+	}else {
+		parseTags(rawString,parsedTag)
+	}
+	return nil
+}
 func parseHeaderTag(rawTag string, botname string, parsedTag *RobotsTag) error {
 	var botnameAndBody []string = strings.SplitN(rawTag, ":", 2)
 	// Position of the tags if no botname is present.
@@ -49,26 +89,10 @@ func parseHeaderTag(rawTag string, botname string, parsedTag *RobotsTag) error {
 			return nil
 		}
 	}
-	tags := parseTags(botnameAndBody[i])
-	fmt.Println(tags)
-	for counter, tag := range tags {
-		fmt.Println(counter, tag)
-		switch tag {
-		case "noindex":
-			parsedTag.Noindex = true
-		case "nofollow":
-			parsedTag.Nofollow = true
-		case "nosnippet":
-			parsedTag.Nosnippet = true
-		case "noarchive":
-			parsedTag.Noarchive = true
-		case "noodp":
-			parsedTag.Noodp = true
-		}
-
-	}
+	parseTags(botnameAndBody[i], parsedTag)
 	return nil
 }
+
 
 func parseUnavailableAfter(rawTime string) (*time.Time, error) {
 	trimmedTime := strings.Trim(rawTime, " ")
@@ -92,10 +116,22 @@ func parseUnavailableAfter(rawTime string) (*time.Time, error) {
 	return nil, errors.New("Could not parse time. Unknown format: " + trimmedTime)
 }
 
-func parseTags (rawTags string) []string {
+func parseTags (rawTags string, parsedTag *RobotsTag) []string {
 	var tags []string = strings.Split(rawTags, ",")
-	for i, tag := range tags {
-		tags[i] = strings.Trim(tag, " ")
+	for _, tag := range tags {
+		tag := strings.Trim(tag, " ")
+		switch tag {
+		case "noindex":
+			parsedTag.Noindex = true
+		case "nofollow":
+			parsedTag.Nofollow = true
+		case "nosnippet":
+			parsedTag.Nosnippet = true
+		case "noarchive":
+			parsedTag.Noarchive = true
+		case "noodp":
+			parsedTag.Noodp = true
+		}
 	}
 	return tags
 }

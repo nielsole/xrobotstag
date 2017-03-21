@@ -3,6 +3,7 @@ package xrobotstag
 import (
 	"testing"
 	"net/http"
+	"golang.org/x/net/html"
 )
 
 func TestHellowWorld(t *testing.T) {
@@ -45,5 +46,16 @@ func TestParserHeaderDate(t *testing.T) {
 	}
 	if parsedRobotsTag.Noindex == true || parsedRobotsTag.UnavailableAfter == nil {
 		t.Error("Expected UnavailableAfter to be set.")
+	}
+}
+
+func TestParserHtmlTagSimple(t *testing.T) {
+	parsedRobotsTag := RobotsTag{}
+	err := RobotsTagFromHtmlTag(&html.Node{Data: "meta",Attr:[]html.Attribute{{Key:"name", Val:"robots"},{Key:"content", Val:"noindex, nofollow"}}}, "googlebot", &parsedRobotsTag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsedRobotsTag.Noindex == false || parsedRobotsTag.Nofollow == false {
+		t.Error("Html tag was not correctly parsed. Expected noindex and nofollow to be set.")
 	}
 }
